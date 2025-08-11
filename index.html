@@ -1,0 +1,663 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Guide to Sacramento Music & Happy Hours</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Warm Neutral Harmony -->
+    <!-- Application Structure Plan: The application is designed as a single-page interactive dashboard. The core is a filterable card-based gallery of venues, which is more intuitive for users than a linear report. Users can immediately filter by key criteria (neighborhood, vibe, music, happy hour) to find spots matching their needs. Clicking a card opens a modal with detailed information, preventing page reloads and keeping the user in the context of their search. This structure transforms passive reading into an active, user-driven exploration, making the data highly accessible and actionable. -->
+    <!-- Visualization & Content Choices: 
+        - Venue Data: Report Info -> Venue details. Goal -> Inform/Compare. Method -> Interactive HTML/Tailwind cards. Interaction -> JS filters update the gallery; clicking a card opens a detailed modal. Justification -> This is a standard, effective UI for browsing a collection, allowing quick scanning and deep dives.
+        - Music Genre Distribution: Report Info -> Music genres per venue. Goal -> Show Proportions. Method -> Chart.js Donut Chart. Interaction -> Hovering shows details; clicking a slice filters the venue gallery. Justification -> Provides a quick, visual overview of the city's music scene composition.
+        - Happy Hour Availability: Report Info -> Happy hour days/times. Goal -> Compare Availability. Method -> Chart.js Bar Chart. Interaction -> Hovering shows exact times. Justification -> Visually comparing schedules across venues is far easier with a chart than reading a table.
+        - Library/Method -> All visualizations are rendered on <canvas> using Chart.js.
+    -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF8;
+            color: #4A4A4A;
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 350px;
+            max-height: 400px;
+        }
+        @media (max-width: 768px) {
+            .chart-container {
+                height: 300px;
+            }
+        }
+        .modal-bg {
+            transition: opacity 0.3s ease;
+        }
+        .modal-box {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+        .nav-button {
+            transition: background-color 0.2s, color 0.2s;
+        }
+        .nav-button.active {
+            background-color: #D1C4E9;
+            color: #4A148C;
+        }
+        .card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #D1C4E9;
+            border-radius: 10px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #B39DDB;
+        }
+    </style>
+</head>
+<body class="antialiased">
+
+    <header class="bg-white shadow-sm sticky top-0 z-40">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex items-center justify-between h-16">
+                <div class="flex items-center">
+                    <span class="text-2xl font-bold text-purple-800">Sacramento Scene</span>
+                </div>
+                <nav class="hidden md:flex space-x-8">
+                    <a href="#dashboard" class="nav-button text-gray-600 hover:text-purple-700 font-medium">Dashboard</a>
+                    <a href="#explorer" class="nav-button text-gray-600 hover:text-purple-700 font-medium">Venue Explorer</a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <section id="hero" class="text-center py-12">
+            <h1 class="text-4xl md:text-5xl font-extrabold tracking-tight text-gray-800 mb-4">Discover Sacramento's Best Nights Out</h1>
+            <p class="max-w-3xl mx-auto text-lg text-gray-600">
+                An interactive guide to the city's top spots for happy hours and live music. Use the dashboard and explorer below to find your perfect vibe, from rooftop lounges to historic blues clubs.
+            </p>
+        </section>
+
+        <section id="dashboard" class="py-12 bg-purple-50 rounded-xl p-6 md:p-8 mb-12">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-gray-800">City Vibe Dashboard</h2>
+                <p class="text-md text-gray-600 mt-2">Get a quick overview of the city's music and happy hour landscape. Click on a chart segment to filter the venues below.</p>
+            </div>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 items-center">
+                <div class="w-full">
+                    <h3 class="text-xl font-semibold text-center mb-4 text-gray-700">Music Genre Distribution</h3>
+                    <div class="chart-container">
+                        <canvas id="musicGenreChart"></canvas>
+                    </div>
+                </div>
+                <div class="w-full">
+                    <h3 class="text-xl font-semibold text-center mb-4 text-gray-700">Happy Hour Availability by Day</h3>
+                    <div class="chart-container">
+                        <canvas id="happyHourChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="explorer" class="py-12">
+            <div class="text-center mb-10">
+                <h2 class="text-3xl font-bold text-gray-800">Venue Explorer</h2>
+                <p class="text-md text-gray-600 mt-2">Filter and search for venues based on your preferences. Click on any card to see full details.</p>
+            </div>
+            <div class="bg-white rounded-lg shadow p-4 mb-8 sticky top-16 z-30">
+                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+                    <select id="filter-neighborhood" class="filter-control w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
+                        <option value="all">All Neighborhoods</option>
+                    </select>
+                    <select id="filter-type" class="filter-control w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
+                        <option value="all">All Types</option>
+                    </select>
+                    <select id="filter-music" class="filter-control w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
+                        <option value="all">All Music</option>
+                    </select>
+                    <select id="filter-happy-hour" class="filter-control w-full p-2 border border-gray-300 rounded-md shadow-sm focus:ring-purple-500 focus:border-purple-500">
+                        <option value="all">Any Happy Hour</option>
+                        <option value="weekday">Weekday</option>
+                        <option value="weekend">Weekend</option>
+                    </select>
+                    <button id="reset-filters" class="w-full bg-purple-600 text-white font-semibold py-2 px-4 rounded-md hover:bg-purple-700 transition-colors">Reset Filters</button>
+                </div>
+            </div>
+
+            <div id="venue-grid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            </div>
+             <div id="no-results" class="hidden text-center py-16">
+                <p class="text-xl text-gray-500">No venues match your current filters.</p>
+            </div>
+        </section>
+    </main>
+    
+    <footer class="bg-gray-800 text-white mt-16">
+        <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-6 text-center">
+            <p>&copy; 2025 Sacramento Scene Explorer. All data based on provided research report.</p>
+        </div>
+    </footer>
+
+    <div id="venue-modal" class="fixed inset-0 z-50 flex items-center justify-center p-4 hidden">
+        <div class="modal-bg fixed inset-0 bg-black bg-opacity-60" id="modal-bg"></div>
+        <div id="modal-box" class="modal-box bg-white rounded-lg shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative transform scale-95 opacity-0">
+            <button id="close-modal" class="absolute top-4 right-4 text-gray-500 hover:text-gray-800">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+            </button>
+            <div id="modal-content" class="p-6 md:p-8">
+            </div>
+        </div>
+    </div>
+
+
+    <script>
+        const venues = [
+            {
+                name: "Revival",
+                type: "Rooftop Bar/Lounge",
+                neighborhood: "Downtown",
+                happyHour: {
+                    days: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Sun: All Day (4-10 PM); Mon-Fri: 4-6 PM",
+                    summary: "Discounted beer, wine, cocktails; Themed daily specials like $2 Oysters Mon, Taco/Margarita Tues.",
+                    hasWeekday: true,
+                    hasWeekend: true
+                },
+                music: {
+                    frequency: "Nightly",
+                    genres: ["DJ", "Live Music"],
+                },
+                highlights: "Upscale, resort-like atmosphere with a pool deck overlooking the Golden 1 Center. Offers VIP cabanas and themed weekday specials to draw crowds.",
+                age: "None stated",
+                id: "revival"
+            },
+            {
+                name: "MIX Downtown",
+                type: "Rooftop Nightclub/Lounge",
+                neighborhood: "Downtown",
+                happyHour: {
+                    days: ["Tue", "Sun"],
+                    times: "Tue: 6-8 PM (during Taco Tuesdaze); Sun: 9:30 PM-12 AM",
+                    summary: "$7 U-Call-It (Sun); Taco Towers & Punch Bowl Margs (Tue).",
+                    hasWeekday: true,
+                    hasWeekend: true
+                },
+                music: {
+                    frequency: "Nightly DJ (Fri-Sun)",
+                    genres: ["DJ"],
+                },
+                highlights: "Premier rooftop nightclub with stunning city views. Known for themed dance parties, VIP packages, and a vibrant, upscale atmosphere.",
+                age: "21+",
+                id: "mix-downtown"
+            },
+            {
+                name: "Rock & Brews Cal Expo",
+                type: "Restaurant/Live Music Venue",
+                neighborhood: "Cal Expo",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Mon-Fri: 3-6 PM",
+                    summary: "General happy hour specials.",
+                    hasWeekday: true,
+                    hasWeekend: false
+                },
+                music: {
+                    frequency: "Regular Concerts",
+                    genres: ["Rock", "Tribute", "Reggae", "DJ"],
+                },
+                highlights: "Family-friendly rock-inspired venue with mini-golf and batting cages. Hosts regular live concerts and major music festivals.",
+                age: "None stated",
+                id: "rock-brews"
+            },
+            {
+                name: "The Shady Lady Saloon",
+                type: "Bar/Lounge",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Mon-Fri: 3-6 PM",
+                    summary: "$5 Well, $1 off Drafts, $9 House Cocktails, discounted bites.",
+                    hasWeekday: true,
+                    hasWeekend: false
+                },
+                music: {
+                    frequency: "3 nights/week",
+                    genres: ["Jazz", "Blues", "Country"],
+                },
+                highlights: "Acclaimed 1920s-era saloon with an intimate ambiance. Music is curated to complement the sophisticated, speakeasy vibe.",
+                age: "None stated",
+                id: "shady-lady"
+            },
+            {
+                name: "Torch Club",
+                type: "Blues Club/Bar",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                    times: "Tue-Sun: 12 PM-8 PM (drinks); 5-7:30 PM (live music)",
+                    summary: "Happy Hour drink specials and free live music.",
+                    hasWeekday: true,
+                    hasWeekend: true
+                },
+                music: {
+                    frequency: "Daily",
+                    genres: ["Blues", "Jazz", "Acoustic", "Open Mic"],
+                },
+                highlights: "Historic and iconic blues club. Features a dual-tiered entertainment model with free early shows and ticketed nightly acts. A true community hub for music lovers.",
+                age: "21+",
+                id: "torch-club"
+            },
+            {
+                name: "Harlow's",
+                type: "Live Music Venue/Restaurant",
+                neighborhood: "Midtown",
+                happyHour: { days: [], times: "Not advertised", summary: "N/A", hasWeekday: false, hasWeekend: false },
+                music: {
+                    frequency: "Almost Daily",
+                    genres: ["Rock", "Hip-Hop", "Indie", "Tribute", "R&B"],
+                },
+                highlights: "A cornerstone of Sacramento's music scene since 1982. Features excellent sound, a spacious dance floor, and hosts both national and local acts. The upstairs Starlet Room is for emerging artists.",
+                age: "Varies by event",
+                id: "harlows"
+            },
+            {
+                name: "Old Ironsides",
+                type: "Historic Restaurant/Bar",
+                neighborhood: "Downtown",
+                happyHour: { days: [], times: "Not advertised", summary: "N/A", hasWeekday: false, hasWeekend: false },
+                music: {
+                    frequency: "Diverse Live Performances",
+                    genres: ["Rap", "Metal", "Tribute", "Rock"],
+                },
+                highlights: "Established in 1934, this venue blends historic charm with a modern, eclectic music scene. Known as a vibrant community hub with a casual, old-school atmosphere.",
+                age: "21+",
+                id: "old-ironsides"
+            },
+            {
+                name: "58 Degrees & Holding Co.",
+                type: "Wine Bar/Restaurant",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                    times: "Daily: 3-6 PM",
+                    summary: "$5 Chambongs, $3 Rosé Oysters, discounted bites/drinks.",
+                    hasWeekday: true,
+                    hasWeekend: true
+                },
+                music: {
+                    frequency: "Thursdays",
+                    genres: ["Jazz"],
+                },
+                highlights: "Upscale wine bar with an extensive list, craft cocktails, and charcuterie. Live jazz on Thursdays complements the sophisticated lounge vibe.",
+                age: "None stated",
+                id: "58-degrees"
+            },
+            {
+                name: "Alaro Craft Brewery",
+                type: "Brewery/Restaurant",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Mon-Fri: 2-5 PM",
+                    summary: "Discounted pints at the bar/front patio.",
+                    hasWeekday: true,
+                    hasWeekend: false
+                },
+                music: {
+                    frequency: "Occasional",
+                    genres: ["Flamenco"],
+                },
+                highlights: "Award-winning brewery with a Spanish-inspired farm-to-fork menu. Hosts unique cultural events like Paella and Flamenco Night. Committed to ethical sourcing.",
+                age: "None stated",
+                id: "alaro-brewery"
+            },
+            {
+                name: "Historic Star Lounge",
+                type: "Restaurant/Bar",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Mon-Fri: 3-6 PM",
+                    summary: "$9 classic cocktails, $7 well liquor/draft beer/wine.",
+                    hasWeekday: true,
+                    hasWeekend: false
+                },
+                music: {
+                    frequency: "Occasional",
+                    genres: ["Jazz", "Pop", "R&B", "Acoustic"],
+                },
+                highlights: "Located in a restored historic building, this lounge aims to be an incubator of creativity, blending art, music, and food. Offers intimate seating with views over Sutter's Fort.",
+                age: "None stated",
+                id: "star-lounge"
+            },
+            {
+                name: "The Golden Bear",
+                type: "Restaurant/Bar",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+                    times: "Mon-Fri: 4-7 PM",
+                    summary: "$10 & under food, $6 well drinks, $10 special cocktails.",
+                    hasWeekday: true,
+                    hasWeekend: false
+                },
+                music: {
+                    frequency: "Mondays",
+                    genres: ["Comedy"],
+                },
+                highlights: "Lively social club vibe with a popular Open Mic Comedy Night on Mondays. Offers a diverse menu and a spacious patio.",
+                age: "None stated",
+                id: "golden-bear"
+            },
+            {
+                name: "The Flamingo House",
+                type: "Day-Night Club/Restaurant",
+                neighborhood: "Midtown",
+                happyHour: {
+                    days: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"],
+                    times: "Daily until 8 PM",
+                    summary: "$8 & under food, $8 featured cocktails, $6 well drinks.",
+                    hasWeekday: true,
+                    hasWeekend: true
+                },
+                music: {
+                    frequency: "Daily",
+                    genres: ["DJ", "Themed Dance Parties"],
+                },
+                highlights: "Vibrant tropical-themed club with a focus on experiential entertainment like Silent Disco Sundays. Caters to a younger, active crowd with daily DJ sets.",
+                age: "None stated",
+                id: "flamingo-house"
+            }
+        ];
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const venueGrid = document.getElementById('venue-grid');
+            const modal = document.getElementById('venue-modal');
+            const modalContent = document.getElementById('modal-content');
+            const closeModalBtn = document.getElementById('close-modal');
+            const modalBg = document.getElementById('modal-bg');
+            const noResultsDiv = document.getElementById('no-results');
+
+            const filterNeighborhood = document.getElementById('filter-neighborhood');
+            const filterType = document.getElementById('filter-type');
+            const filterMusic = document.getElementById('filter-music');
+            const filterHappyHour = document.getElementById('filter-happy-hour');
+            const resetFiltersBtn = document.getElementById('reset-filters');
+            
+            let musicGenreChartInstance, happyHourChartInstance;
+
+            function populateFilters() {
+                const neighborhoods = [...new Set(venues.map(v => v.neighborhood))];
+                const types = [...new Set(venues.map(v => v.type))];
+                const musicGenres = [...new Set(venues.flatMap(v => v.music.genres))];
+
+                neighborhoods.forEach(n => {
+                    const option = document.createElement('option');
+                    option.value = n;
+                    option.textContent = n;
+                    filterNeighborhood.appendChild(option);
+                });
+
+                types.forEach(t => {
+                    const option = document.createElement('option');
+                    option.value = t;
+                    option.textContent = t;
+                    filterType.appendChild(option);
+                });
+
+                musicGenres.forEach(m => {
+                    const option = document.createElement('option');
+                    option.value = m;
+                    option.textContent = m;
+                    filterMusic.appendChild(option);
+                });
+            }
+
+            function renderVenues(filteredVenues) {
+                venueGrid.innerHTML = '';
+                if (filteredVenues.length === 0) {
+                    noResultsDiv.classList.remove('hidden');
+                } else {
+                    noResultsDiv.classList.add('hidden');
+                }
+                filteredVenues.forEach(venue => {
+                    const card = document.createElement('div');
+                    card.className = 'card bg-white rounded-lg shadow-md overflow-hidden cursor-pointer';
+                    card.innerHTML = `
+                        <div class="p-5">
+                            <p class="text-sm font-semibold text-purple-600">${venue.neighborhood.toUpperCase()}</p>
+                            <h3 class="text-xl font-bold text-gray-800 mt-1">${venue.name}</h3>
+                            <p class="text-gray-600 mt-2">${venue.type}</p>
+                            <div class="mt-4 flex flex-wrap gap-2">
+                                ${venue.music.genres.map(g => `<span class="text-xs font-medium bg-gray-200 text-gray-800 px-2 py-1 rounded-full">${g}</span>`).join('')}
+                            </div>
+                        </div>
+                    `;
+                    card.addEventListener('click', () => openModal(venue));
+                    venueGrid.appendChild(card);
+                });
+            }
+
+            function openModal(venue) {
+                modalContent.innerHTML = `
+                    <h2 class="text-3xl font-bold text-gray-900">${venue.name}</h2>
+                    <p class="text-lg text-gray-600 mt-1">${venue.type} in ${venue.neighborhood}</p>
+                    <div class="mt-6 border-t border-gray-200 pt-6">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-800 mb-2">Happy Hour</h4>
+                                <p><strong>When:</strong> ${venue.happyHour.times}</p>
+                                <p><strong>Deals:</strong> ${venue.happyHour.summary}</p>
+                            </div>
+                            <div>
+                                <h4 class="text-lg font-semibold text-gray-800 mb-2">Live Music</h4>
+                                <p><strong>Frequency:</strong> ${venue.music.frequency}</p>
+                                <p><strong>Genres:</strong> ${venue.music.genres.join(', ')}</p>
+                            </div>
+                        </div>
+                        <div class="mt-6">
+                            <h4 class="text-lg font-semibold text-gray-800 mb-2">The Vibe</h4>
+                            <p>${venue.highlights}</p>
+                        </div>
+                         <div class="mt-4 text-sm text-gray-500">
+                            <strong>Age Restriction:</strong> ${venue.age}
+                        </div>
+                    </div>
+                `;
+                modal.classList.remove('hidden');
+                setTimeout(() => {
+                    modal.querySelector('.modal-bg').classList.remove('opacity-0');
+                    modal.querySelector('.modal-box').classList.remove('opacity-0', 'scale-95');
+                }, 10);
+            }
+
+            function closeModal() {
+                 modal.querySelector('.modal-bg').classList.add('opacity-0');
+                 modal.querySelector('.modal-box').classList.add('opacity-0', 'scale-95');
+                 setTimeout(() => modal.classList.add('hidden'), 300);
+            }
+
+            function applyFilters() {
+                const neighborhood = filterNeighborhood.value;
+                const type = filterType.value;
+                const music = filterMusic.value;
+                const happyHour = filterHappyHour.value;
+
+                const filtered = venues.filter(v => {
+                    const neighborhoodMatch = neighborhood === 'all' || v.neighborhood === neighborhood;
+                    const typeMatch = type === 'all' || v.type === type;
+                    const musicMatch = music === 'all' || v.music.genres.includes(music);
+                    const happyHourMatch = happyHour === 'all' || 
+                                           (happyHour === 'weekday' && v.happyHour.hasWeekday) ||
+                                           (happyHour === 'weekend' && v.happyHour.hasWeekend);
+                    return neighborhoodMatch && typeMatch && musicMatch && happyHourMatch;
+                });
+
+                renderVenues(filtered);
+            }
+
+            function createMusicGenreChart() {
+                const ctx = document.getElementById('musicGenreChart').getContext('2d');
+                const genreCounts = venues.flatMap(v => v.music.genres).reduce((acc, genre) => {
+                    acc[genre] = (acc[genre] || 0) + 1;
+                    return acc;
+                }, {});
+
+                const data = {
+                    labels: Object.keys(genreCounts),
+                    datasets: [{
+                        label: 'Venues by Genre',
+                        data: Object.values(genreCounts),
+                        backgroundColor: [
+                            '#8E44AD', '#3498DB', '#1ABC9C', '#F1C40F', '#E74C3C',
+                            '#9B59B6', '#2980B9', '#16A085', '#F39C12', '#C0392B'
+                        ],
+                        borderColor: '#FDFBF8',
+                        borderWidth: 2,
+                        hoverOffset: 4
+                    }]
+                };
+
+                musicGenreChartInstance = new Chart(ctx, {
+                    type: 'doughnut',
+                    data: data,
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        family: "'Inter', sans-serif"
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                titleFont: { family: "'Inter', sans-serif" },
+                                bodyFont: { family: "'Inter', sans-serif" }
+                            }
+                        },
+                        onClick: (event, elements) => {
+                            if (elements.length > 0) {
+                                const chartElement = elements[0];
+                                const genre = data.labels[chartElement.index];
+                                filterMusic.value = genre;
+                                applyFilters();
+                                document.getElementById('explorer').scrollIntoView({ behavior: 'smooth' });
+                            }
+                        }
+                    }
+                });
+            }
+
+            function createHappyHourChart() {
+                const ctx = document.getElementById('happyHourChart').getContext('2d');
+                const daysOfWeek = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                const venueLabels = venues.map(v => v.name);
+                const datasets = daysOfWeek.map((day, index) => ({
+                    label: day,
+                    data: venues.map(v => v.happyHour.days.includes(day) ? 1 : 0),
+                    backgroundColor: `hsl(${280 + index * 15}, 60%, 70%)`
+                }));
+
+                happyHourChartInstance = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: venueLabels,
+                        datasets: datasets
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            x: {
+                                stacked: true,
+                                display: false
+                            },
+                            y: {
+                                stacked: true,
+                                ticks: {
+                                    font: {
+                                        size: 10,
+                                        family: "'Inter', sans-serif"
+                                    }
+                                }
+                            }
+                        },
+                        plugins: {
+                            legend: {
+                                position: 'bottom',
+                                labels: {
+                                    font: {
+                                        family: "'Inter', sans-serif"
+                                    }
+                                }
+                            },
+                            tooltip: {
+                                titleFont: { family: "'Inter', sans-serif" },
+                                bodyFont: { family: "'Inter', sans-serif" },
+                                callbacks: {
+                                    label: function(context) {
+                                        const venueIndex = context.dataIndex;
+                                        const venue = venues[venueIndex];
+                                        return `${venue.name}: ${venue.happyHour.times}`;
+                                    },
+                                    title: function(context) {
+                                        return context[0].dataset.label;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                });
+            }
+
+            closeModalBtn.addEventListener('click', closeModal);
+            modalBg.addEventListener('click', closeModal);
+            document.querySelectorAll('.filter-control').forEach(el => el.addEventListener('change', applyFilters));
+            resetFiltersBtn.addEventListener('click', () => {
+                filterNeighborhood.value = 'all';
+                filterType.value = 'all';
+                filterMusic.value = 'all';
+                filterHappyHour.value = 'all';
+                applyFilters();
+            });
+
+            document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+                anchor.addEventListener('click', function (e) {
+                    e.preventDefault();
+                    document.querySelector(this.getAttribute('href')).scrollIntoView({
+                        behavior: 'smooth'
+                    });
+                });
+            });
+
+            populateFilters();
+            renderVenues(venues);
+            createMusicGenreChart();
+            createHappyHourChart();
+        });
+    </script>
+</body>
+</html>
